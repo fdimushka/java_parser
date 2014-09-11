@@ -1,2 +1,4 @@
-/parser
-/net
+/core/
+/managers/
+/net/
+/parser/

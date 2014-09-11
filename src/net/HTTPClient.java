@@ -5,6 +5,10 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import managers.ProxyManager;
+import managers.ProxyManager.ProxyData;
 
 public class HTTPClient
 {
@@ -14,7 +18,7 @@ public class HTTPClient
 	private String 				url;
 	private String 				response;
 	private Proxy				proxy 			= null;
-	
+	private int					proxyIndex		= 0;
 	 
 	public HTTPClient( ) {
 		coockies.add( "session=processform=0" );
@@ -29,8 +33,12 @@ public class HTTPClient
 		this.user_agent = user_agent;
 	}
 	
-	public void setProxy( String host, int port ) {
-		this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress( host, port ));
+	public void nextProxy( ) {
+		proxyIndex = ProxyManager.instance.getProxyIndex();
+		ProxyData proxyData = ProxyManager.instance.getProxy();
+		
+		
+		this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress( proxyData.host, proxyData.port ));
 	}
 	
 	public int getResponseCode() {
@@ -48,7 +56,7 @@ public class HTTPClient
 	// HTTP GET request
 	public void sendGet() {
 
-		System.out.println("Send Http GET request");
+		responseCode = 404;
 		
 		URL obj;
 		try {
@@ -62,12 +70,10 @@ public class HTTPClient
 			else
 				con = (HttpURLConnection) obj.openConnection( );
 	 
-			//con = new URL(urlString)
-			//103.11.116.46 	8080
-			// optional default is GET
+			con.setConnectTimeout( 5000 );
+
 			con.setRequestMethod("GET");
 	 
-	
 			if( coockies.size() > 0 ){
 				String coockiesString = "";
 	
@@ -75,35 +81,41 @@ public class HTTPClient
 					coockiesString += s + "; ";
 			
 				con.setRequestProperty( "Cookie", coockiesString );
+				
+				System.out.println("Send Cookie "+coockiesString);
 			}
 	
 			responseCode 			 = con.getResponseCode();
-			String coockiesString 	 = con.getHeaderField("Set-Cookie");
-			
-			List<String> newCoockies = new ArrayList<String>();
-			
-			if( coockiesString !=  null && !coockiesString.isEmpty() ){
-				newCoockies = Arrays.asList( coockiesString.split("\\s*;\\s*") );
-			}
-			
-			for( String coockie : newCoockies ){
-				coockie = coockie.replaceAll(" ", "");
-				if(!coockies.contains( coockie ) 
-						&& !coockie.equals("secure")
-						//&& !coockie.contains("path")
-						//&& !coockie.contains("expires")
-						//&& !coockie.contains("domain") 
-				  ){
-					coockies.add( coockie );
-				}
-			}
+
 		    
-			
+			System.out.println("\nProxy : " + this.proxy.address().toString());
 			System.out.println("\nSending 'GET' request to URL : " + url);
 			System.out.println("Response Code : " + responseCode);
-			System.out.println("Cookie : " + coockies);
 			
-			
+			Map<String, List<String>> map = con.getHeaderFields();
+			for (Map.Entry<String, List<String>> entry : map.entrySet()) {
+				System.out.println("Key : " + entry.getKey() + 
+		                 " ,Value : " + entry.getValue());
+				
+				if( entry.getKey() != null && entry.getKey().equals("Set-Cookie")){
+					//List<String> newCoockies = Arrays.asList( entry.getValue()..split("\\s*;\\s*") );
+					for( String coockie : entry.getValue() ){
+						//System.out.println(coockie);
+						
+						List<String> newCoockies = Arrays.asList( coockie.split("\\s*;\\s*") );
+						
+						for( String newCoockie : newCoockies ){
+							newCoockie = newCoockie.replaceAll("secure", "");
+							newCoockie = newCoockie.replaceAll(" ", "");
+							
+							if( !coockies.contains(newCoockie) && !newCoockie.contains("path") && !newCoockie.contains("expires") && !newCoockie.contains("domain") && !newCoockie.isEmpty() ){
+								coockies.add( newCoockie );
+							}
+						}
+					}
+				}
+			}
+
 	 
 			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 			String inputLine;
@@ -120,9 +132,11 @@ public class HTTPClient
 		
 		} catch (MalformedURLException e) {
 			// TODO Auto-generated catch block
+			responseCode = 404;
 			e.printStackTrace();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
+			responseCode = 404;
 			e.printStackTrace();
 		}
 	}
